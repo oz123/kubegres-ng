@@ -43,6 +43,7 @@ const (
 	PrimaryRoleName                        = "primary"
 	KindKubegres                           = "Kubegres"
 	DeploymentOwnerKey                     = ".metadata.controller"
+	PauseReconcileAnnotation               = "kubegres.reactive-tech.io/pause-reconcile"
 	DatabaseVolumeName                     = "postgres-db"
 	BaseConfigMapVolumeName                = "base-config"
 	CustomConfigMapVolumeName              = "custom-config"

@@ -83,6 +83,7 @@ func (r *StatefulSetsStates) createAndAppendStatefulSetStates(statefulSet apps.S
 	statefulSetWrapper := StatefulSetWrapper{}
 	statefulSetWrapper.IsDeployed = true
 	statefulSetWrapper.IsReady = statefulSet.Status.ReadyReplicas > 0
+	statefulSetWrapper.IsPaused = statefulSet.Annotations[ctx.PauseReconcileAnnotation] == "true"
 	statefulSetWrapper.StatefulSet = statefulSet
 
 	instanceIndex, err := r.getInstanceIndexFromSpec(statefulSet)
