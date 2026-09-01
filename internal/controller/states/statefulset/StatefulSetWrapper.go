@@ -10,6 +10,7 @@ import (
 type StatefulSetWrapper struct {
 	IsDeployed    bool
 	IsReady       bool
+	IsPaused      bool
 	InstanceIndex int32
 	StatefulSet   v1.StatefulSet
 	Pod           PodWrapper
