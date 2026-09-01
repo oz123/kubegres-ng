@@ -126,9 +126,6 @@ func (r *ReplicaDbCountSpecEnforcer) Enforce() error {
 	} else if nbreNewReplicaToDeploy == 0 {
 		for _, replicaStatefulSet := range r.getDeployedReplicas() {
 			if replicaStatefulSet.IsPaused {
-				if replicaStatefulSet.IsReady {
-					return r.clearPauseReconcileAnnotation(replicaStatefulSet)
-				}
 				r.logReplicaReconcileIsPaused(replicaStatefulSet)
 				continue
 			}
@@ -344,28 +341,10 @@ func (r *ReplicaDbCountSpecEnforcer) deleteStatefulSet(statefulSetToDelete v1.St
 	return nil
 }
 
-func (r *ReplicaDbCountSpecEnforcer) clearPauseReconcileAnnotation(replicaStatefulSet statefulset.StatefulSetWrapper) error {
-
-	statefulSetToUpdate := replicaStatefulSet.StatefulSet
-	delete(statefulSetToUpdate.Annotations, ctx.PauseReconcileAnnotation)
-
-	err := r.kubegresContext.Client.Update(r.kubegresContext.Ctx, &statefulSetToUpdate)
-	if err != nil {
-		r.kubegresContext.Log.ErrorEvent("ReplicaStatefulSetPauseClearErr", err,
-			"Unable to remove pause-reconcile annotation from Replica StatefulSet that has become ready again.",
-			"Replica name", statefulSetToUpdate.Name)
-		return err
-	}
-
-	r.kubegresContext.Log.InfoEvent("ReplicaStatefulSetPauseCleared",
-		"Replica StatefulSet is ready again. Removed pause-reconcile annotation.",
-		"Replica name", statefulSetToUpdate.Name)
-	return nil
-}
-
 func (r *ReplicaDbCountSpecEnforcer) logReplicaReconcileIsPaused(replicaStatefulSet statefulset.StatefulSetWrapper) {
-	r.kubegresContext.Log.Info("Reconciliation of Replica StatefulSet is paused via annotation '" +
-		ctx.PauseReconcileAnnotation + "'. Kubegres will not undeploy/redeploy it while it is not ready.",
+	r.kubegresContext.Log.Info("Reconciliation of Replica StatefulSet is paused via annotation '"+
+		ctx.PauseReconcileAnnotation+"'. Kubegres will not undeploy/redeploy it regardless of readiness "+
+		"until the annotation is manually removed.",
 		"Replica name", replicaStatefulSet.StatefulSet.Name)
 }
 

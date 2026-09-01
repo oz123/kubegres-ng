@@ -49,7 +49,7 @@ var _ = Describe("A Replica StatefulSet is annotated with pause-reconcile and it
 
 	Context("GIVEN Kubegres with 1 primary and 2 replicas AND one replica's StatefulSet is annotated with 'kubegres.reactive-tech.io/pause-reconcile=true' AND its Pod is deleted to simulate a node reboot", func() {
 
-		It("THEN Kubegres should NOT undeploy/redeploy that replica's StatefulSet AND once the Pod is ready again the annotation should be automatically cleared", func() {
+		It("THEN Kubegres should NOT undeploy/redeploy that replica's StatefulSet, even after the Pod becomes ready again, since the annotation is never cleared automatically", func() {
 
 			log.Print("START OF: Test 'A Replica StatefulSet is annotated with pause-reconcile and its Pod becomes unavailable'")
 
@@ -61,13 +61,15 @@ var _ = Describe("A Replica StatefulSet is annotated with pause-reconcile and it
 
 			pausedReplicaName := test.whenAReplicaStatefulSetIsAnnotatedWithPauseReconcile()
 
+			test.thenReplicaStatefulSetShouldStillHavePauseReconcileAnnotationWhileReady(pausedReplicaName)
+
 			test.whenThatReplicaPodIsDeleted(pausedReplicaName)
 
 			test.thenPodsStatesShouldBe(1, 2)
 
 			test.thenReplicaStatefulSetNameShouldStillBe(pausedReplicaName)
 
-			test.thenReplicaStatefulSetShouldNotHavePauseReconcileAnnotation(pausedReplicaName)
+			test.thenReplicaStatefulSetShouldStillHavePauseReconcileAnnotationWhileReady(pausedReplicaName)
 
 			log.Print("END OF: Test 'A Replica StatefulSet is annotated with pause-reconcile and its Pod becomes unavailable'")
 		})
@@ -116,6 +118,40 @@ func (r *SpecPauseReconcileAnnotationTest) whenAReplicaStatefulSetIsAnnotatedWit
 
 	Fail("Could not find a Replica StatefulSet to annotate")
 	return ""
+}
+
+// thenReplicaStatefulSetShouldStillHavePauseReconcileAnnotationWhileReady asserts that the
+// annotation is NOT cleared while the replica is still ready and its Pod has not yet gone
+// unavailable. This reproduces the real-world timing gap between annotating a StatefulSet
+// before draining its node and the node actually going down: several reconcile loops run in
+// that window while the replica is still healthy, and a naive "clear on ready" implementation
+// would wipe the annotation before the maintenance it was meant to protect against even starts.
+func (r *SpecPauseReconcileAnnotationTest) thenReplicaStatefulSetShouldStillHavePauseReconcileAnnotationWhileReady(replicaStatefulSetName string) {
+	Consistently(func() bool {
+
+		kubegresResources, err := r.resourceRetriever.GetKubegresResources()
+		if err != nil {
+			log.Println("ERROR while retrieving Kubegres kubegresResources")
+			return false
+		}
+
+		for _, kubegresResource := range kubegresResources.Resources {
+			if kubegresResource.StatefulSet.Name != replicaStatefulSetName {
+				continue
+			}
+
+			_, hasAnnotation := kubegresResource.StatefulSet.Metadata.Annotations[kubegresctx.PauseReconcileAnnotation]
+			if !hasAnnotation {
+				log.Println("Replica StatefulSet '" + replicaStatefulSetName + "' lost the pause-reconcile annotation while still ready")
+				return false
+			}
+
+			return true
+		}
+
+		return false
+
+	}, resourceConfigs2.TestTimeout, resourceConfigs2.TestRetryInterval).Should(BeTrue())
 }
 
 // whenThatReplicaPodIsDeleted deletes the Pod owned by the given replica StatefulSet, simulating
